@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciamento de Viagem (Dias 17 a 30)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="app" class="max-w-7xl mx-auto p-4 md:p-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-slate-900">Gerenciamento da Próxima Viagem</h1>
+            <p class="text-slate-600">Acompanhamento integrado com o Google Sheets (Dias 17 ao 30)</p>
+            <div v-if="loading" class="mt-4 text-blue-600 font-medium">Carregando dados da planilha...</div>
+            <div v-if="saving" class="mt-2 text-sm text-amber-600 font-medium">Salvando alteração na planilha...</div>
+        </header>
+
+        <!-- Filtros -->
+        <div class="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-wrap gap-4 items-center justify-between">
+            <div class="flex gap-2">
+                <button @click="filtroTipo = 'Todos'" :class="filtroTipo === 'Todos' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'" class="px-4 py-2 rounded-lg text-sm font-medium transition">Todos</button>
+                <button @click="filtroTipo = 'Explorar Hub'" :class="filtroTipo === 'Explorar Hub' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'" class="px-4 py-2 rounded-lg text-sm font-medium transition">Explorar Hub</button>
+                <button @click="filtroTipo = 'Bate-Volta'" :class="filtroTipo === 'Bate-Volta' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'" class="px-4 py-2 rounded-lg text-sm font-medium transition">Bate-Volta</button>
+                <button @click="filtroTipo = 'Mudança de Hub'" :class="filtroTipo === 'Mudança de Hub' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'" class="px-4 py-2 rounded-lg text-sm font-medium transition">Mudança</button>
+            </div>
+            <button @click="carregarDados" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 transition">Atualizar Dados</button>
+        </div>
+
+        <!-- Grid de Dias -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div v-for="item in diasFiltrados" :key="item.Dia" class="bg-white rounded-xl shadow-md border border-slate-100 p-5 flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="font-bold text-lg text-blue-600">{{ item.Dia }}</span>
+                        <select v-model="item['Tipo de Dia']" @change="atualizarPlanilha(item, 'Tipo de Dia', item['Tipo de Dia'])" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border-0 cursor-pointer">
+                            <option value="Explorar Hub">Explorar Hub</option>
+                            <option value="Bate-Volta">Bate-Volta</option>
+                            <option value="Mudança de Hub">Mudança de Hub</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="text-xs font-semibold text-slate-400 block mb-1">CIDADE HUB ATUAL</label>
+                        <input type="text" v-model="item['Cidade Hub Atual']" @blur="atualizarPlanilha(item, 'Cidade Hub Atual', item['Cidade Hub Atual'])" class="w-full text-sm font-medium border-b border-slate-200 focus:border-blue-500 outline-none py-1">
+                    </div>
+
+                    <div class="mb-3" v-if="item['Tipo de Dia'] !== 'Explorar Hub'">
+                        <label class="text-xs font-semibold text-slate-400 block mb-1">DESTINO (BATE-VOLTA / MUDANÇA)</label>
+                        <input type="text" v-model="item['Destino (Bate-volta / Mudança)']" @blur="atualizarPlanilha(item, 'Destino (Bate-volta / Mudança)', item['Destino (Bate-volta / Mudança)'])" class="w-full text-sm border-b border-slate-200 focus:border-blue-500 outline-none py-1">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="text-xs font-semibold text-slate-400 block mb-1">ENDEREÇO AIRBNB / COMPROVANTE</label>
+                        <input type="text" v-model="item['Endereço Airbnb']" @blur="atualizarPlanilha(item, 'Endereço Airbnb', item['Endereço Airbnb'])" placeholder="Endereço ou link da foto no Drive" class="w-full text-sm border-b border-slate-200 focus:border-blue-500 outline-none py-1 text-slate-600">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="text-xs font-semibold text-slate-400 block mb-1">ROTEIRO E PONTOS DE INTERESSE</label>
+                        <textarea v-model="item['Roteiro do Dia']" @blur="atualizarPlanilha(item, 'Roteiro do Dia', item['Roteiro do Dia'])" rows="2" class="w-full text-sm border rounded-lg p-2 border-slate-200 focus:border-blue-500 outline-none resize-none"></textarea>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-100 bg-amber-50/50 p-3 rounded-lg">
+                    <label class="text-xs font-bold text-amber-700 block mb-1">⭐ O QUE NÃO PODE PERDER</label>
+                    <input type="text" v-model="item['O que NÃO Pode Perder (Imperdível)']" @blur="atualizarPlanilha(item, 'O que NÃO Pode Perder (Imperdível)', item['O que NÃO Pode Perder (Imperdível)'])" class="w-full text-xs bg-transparent border-b border-amber-200 focus:border-amber-500 outline-none py-1 text-amber-900">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+        
+        // COLE AQUI A SUA URL DO GOOGLE APPS SCRIPT GERADA NO PASSO 1
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZlMvLQTtJKtXTWibbz-pHOxwZiLwANjmPINE9KAeS4InaSfBpePFpHQbKXS_fQJQv/exec";
+
+        createApp({
+            setup() {
+                const dias = ref([]);
+                const loading = ref(false);
+                const saving = ref(false);
+                const filtroTipo = ref('Todos');
+
+                const carregarDados = async () => {
+                    if (SCRIPT_URL.includes("SUA_URL")) return;
+                    loading.value = true;
+                    try {
+                        const res = await fetch(SCRIPT_URL);
+                        dias.value = await res.json();
+                    } catch (e) {
+                        console.error("Erro ao carregar dados", e);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const atualizarPlanilha = async (item, field, value) => {
+                    if (SCRIPT_URL.includes("SUA_URL")) return;
+                    saving.value = true;
+                    try {
+                        await fetch(SCRIPT_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                rowIndex: item.rowIndex,
+                                field: field,
+                                value: value
+                            })
+                        });
+                    } catch (e) {
+                        console.error("Erro ao salvar", e);
+                    } finally {
+                        saving.value = false;
+                    }
+                };
+
+                const diasFiltrados = computed(() => {
+                    if (filtroTipo.value === 'Todos') return dias.value;
+                    return dias.value.filter(d => d['Tipo de Dia'] === filtroTipo.value);
+                });
+
+                onMounted(() => {
+                    carregarDados();
+                });
+
+                return { dias, loading, saving, filtroTipo, carregarDados, atualizarPlanilha, diasFiltrados };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
